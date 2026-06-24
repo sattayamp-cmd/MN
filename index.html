@@ -1,0 +1,1491 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#4a6fa5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>บัญชีรายรับรายจ่าย</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root {
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-2: #f4f0e8;
+  --text: #2d2a26;
+  --text-2: #6b6660;
+  --text-3: #a39c93;
+  --border: #e8e4dc;
+  --border-strong: #d4cdc0;
+  --accent: #4a6fa5;
+  --accent-soft: #e7eef7;
+  --expense: #c44536;
+  --expense-bg: #fdecea;
+  --income: #2d6a4f;
+  --income-bg: #e8f3ee;
+  --warn: #c47b1d;
+  --warn-bg: #fdf3e0;
+  --danger: #b00020;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --safe-bottom: env(safe-area-inset-bottom, 0);
+  --safe-top: env(safe-area-inset-top, 0);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Sarabun", "IBM Plex Sans Thai", Roboto, sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
+input, textarea, select { font: inherit; color: inherit; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+#app { display: flex; flex-direction: column; height: 100dvh; }
+
+/* ============ TABS ============ */
+.tab { display: none; flex: 1; flex-direction: column; min-height: 0; }
+.tab.active { display: flex; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: calc(var(--safe-top) + 12px) 16px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { font-size: 18px; margin: 0; font-weight: 600; }
+.topbar .link-btn { color: var(--accent); font-size: 14px; font-weight: 500; }
+
+/* ============ BOTTOM NAV ============ */
+.bottomnav {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: var(--safe-bottom);
+}
+.bottomnav button {
+  flex: 1;
+  padding: 10px 8px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border-top: 2px solid transparent;
+}
+.bottomnav button .nav-icon { font-size: 20px; line-height: 1; }
+.bottomnav button.active { color: var(--accent); border-top-color: var(--accent); }
+
+/* ============ CHAT TAB ============ */
+#chat-list {
+  flex: 1; overflow-y: auto;
+  padding: 12px 12px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  scroll-behavior: smooth;
+}
+.chat-empty {
+  text-align: center; color: var(--text-3); padding: 40px 24px;
+  font-size: 14px; line-height: 1.6;
+}
+.day-sep {
+  text-align: center; font-size: 12px; color: var(--text-3);
+  margin: 8px 0 2px;
+}
+
+.bubble {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  max-width: 88%;
+  font-size: 14px;
+}
+.bubble.expense { align-self: flex-end; background: var(--expense-bg); border-color: #f5cdc7; }
+.bubble.income  { align-self: flex-start; background: var(--income-bg);  border-color: #c7e0d3; }
+.bubble.dup { border-color: var(--warn); }
+.bubble.loading { align-self: center; background: var(--surface-2); color: var(--text-2); }
+.bubble.error   { align-self: center; background: #fce8e6; color: var(--danger); border-color: #f5cdc7; }
+.bubble.system  { align-self: center; background: transparent; border: none; box-shadow: none; color: var(--text-3); font-size: 12px; padding: 4px; }
+
+.bubble .row-1 { display: flex; align-items: baseline; gap: 8px; }
+.bubble .amount { font-size: 18px; font-weight: 700; }
+.bubble .amount.income { color: var(--income); }
+.bubble .amount.expense { color: var(--expense); }
+.bubble .meta { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.bubble .cat-chip {
+  display: inline-block; font-size: 11px; padding: 2px 8px;
+  background: rgba(0,0,0,.06); border-radius: 999px; margin-left: 6px;
+}
+.bubble .note { margin-top: 4px; }
+.bubble .source-tag { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+.bubble .dup-warn {
+  margin-top: 8px; padding: 8px 10px; background: var(--warn-bg);
+  border-radius: var(--radius-sm); font-size: 12px; color: var(--warn);
+}
+
+/* Editable bubble (confirm flow) */
+.bubble.editing { background: var(--surface); border-color: var(--border-strong); max-width: 92%; align-self: stretch; }
+.bubble.editing.expense { border-left: 4px solid var(--expense); }
+.bubble.editing.income  { border-left: 4px solid var(--income); }
+.bubble .edit-grid {
+  display: grid; grid-template-columns: 80px 1fr; gap: 10px 12px;
+  align-items: center; margin-top: 6px;
+}
+.bubble .edit-grid label { font-size: 12px; color: var(--text-2); }
+.bubble .edit-grid input,
+.bubble .edit-grid select {
+  width: 100%; border: 1px solid var(--border-strong); background: var(--surface);
+  border-radius: var(--radius-sm); padding: 8px 10px; font-size: 14px;
+}
+.bubble .edit-grid input[type="number"] { font-weight: 700; font-size: 16px; }
+.bubble .type-toggle {
+  display: flex; gap: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden;
+}
+.bubble .type-toggle button {
+  flex: 1; padding: 8px 10px; font-size: 13px; background: var(--surface); color: var(--text-2);
+}
+.bubble .type-toggle button.on.expense { background: var(--expense); color: white; }
+.bubble .type-toggle button.on.income  { background: var(--income); color: white; }
+.bubble .actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+.bubble .actions button {
+  padding: 10px 18px; border-radius: var(--radius-sm); font-weight: 600; font-size: 14px;
+}
+.bubble .actions .save { background: var(--accent); color: white; }
+.bubble .actions .cancel { background: var(--surface-2); color: var(--text-2); }
+.bubble .actions .delete { background: transparent; color: var(--danger); margin-right: auto; padding-left: 4px; }
+
+.bubble .thumb {
+  margin-top: 6px;
+  max-width: 200px; max-height: 240px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); display: block;
+}
+
+.bubble .confidence-warn {
+  font-size: 11px; color: var(--warn); margin-top: 4px;
+}
+
+.loading-dots::after {
+  content: '.'; animation: dots 1.2s steps(3, end) infinite;
+}
+@keyframes dots { 0% {content:'.'} 33% {content:'..'} 66% {content:'...'} }
+
+/* ============ COMPOSER ============ */
+.composer {
+  display: flex; align-items: flex-end; gap: 6px;
+  padding: 8px 8px calc(8px + var(--safe-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.composer .icon-btn {
+  width: 40px; height: 40px; font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); flex-shrink: 0;
+}
+.composer .icon-btn:active { background: var(--surface-2); }
+#chat-input {
+  flex: 1; border: 1px solid var(--border-strong); border-radius: 18px;
+  padding: 9px 14px; font-size: 15px; line-height: 1.4;
+  background: var(--surface); resize: none;
+  max-height: 120px; min-height: 38px;
+}
+.composer .send {
+  background: var(--accent); color: white; font-weight: 600;
+  padding: 9px 16px; border-radius: 18px; font-size: 14px;
+  height: 38px;
+}
+.composer .send:disabled { background: var(--text-3); }
+
+/* ============ REPORTS TAB ============ */
+#tab-reports { overflow: hidden; }
+.reports-scroll { flex: 1; overflow-y: auto; padding: 12px 12px 24px; }
+
+.month-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 12px; margin-bottom: 12px;
+}
+.month-nav button { width: 36px; height: 36px; font-size: 18px; color: var(--text-2); }
+.month-nav .label { font-size: 16px; font-weight: 600; }
+
+.summary {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px;
+}
+.summary .card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px; text-align: center;
+}
+.summary .card .lbl { font-size: 11px; color: var(--text-2); }
+.summary .card .val { font-size: 16px; font-weight: 700; margin-top: 4px; }
+.summary .card.exp .val { color: var(--expense); }
+.summary .card.inc .val { color: var(--income); }
+.summary .card.bal .val { color: var(--accent); }
+
+.chart-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 12px;
+}
+.chart-card h3 { font-size: 14px; margin: 0 0 10px; font-weight: 600; }
+.chart-card .empty { color: var(--text-3); font-size: 13px; text-align: center; padding: 24px 0; }
+
+.pie-wrap { display: flex; gap: 14px; align-items: flex-start; }
+.pie-wrap svg { width: 130px; height: 130px; flex-shrink: 0; }
+.pie-legend { flex: 1; font-size: 12px; }
+.pie-legend .item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.pie-legend .sw { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.pie-legend .name { flex: 1; }
+.pie-legend .amt { font-weight: 600; }
+.pie-legend .pct { color: var(--text-3); margin-left: 6px; font-size: 11px; }
+
+.bar-wrap svg { width: 100%; height: 180px; }
+
+.filter-bar {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px; margin-bottom: 10px;
+}
+.filter-bar .chip {
+  padding: 6px 12px; font-size: 12px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-2);
+}
+.filter-bar .chip.on { background: var(--accent); color: white; }
+
+#report-list {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+.report-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.report-row:last-child { border-bottom: none; }
+.report-row .dir-pill {
+  width: 6px; height: 30px; border-radius: 3px; flex-shrink: 0;
+}
+.report-row .dir-pill.expense { background: var(--expense); }
+.report-row .dir-pill.income  { background: var(--income); }
+.report-row .col-1 { flex: 1; min-width: 0; }
+.report-row .col-1 .top { display: flex; align-items: baseline; gap: 6px; }
+.report-row .col-1 .cat { font-weight: 600; font-size: 13px; }
+.report-row .col-1 .date { font-size: 11px; color: var(--text-3); }
+.report-row .col-1 .note { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-row .amount { font-weight: 700; font-size: 15px; }
+.report-row .amount.expense { color: var(--expense); }
+.report-row .amount.income { color: var(--income); }
+
+/* ============ SETTINGS TAB ============ */
+.settings-scroll { flex: 1; overflow-y: auto; padding: 12px 12px 32px; }
+.setting-group {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 12px;
+}
+.setting-group h3 { font-size: 13px; margin: 0 0 4px; font-weight: 600; color: var(--text); }
+.setting-group .hint { font-size: 12px; color: var(--text-2); margin: 0 0 12px; line-height: 1.5; }
+.setting-group label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 4px; margin-top: 8px; }
+.setting-group input[type="text"],
+.setting-group input[type="password"],
+.setting-group select {
+  width: 100%; border: 1px solid var(--border-strong); background: var(--surface);
+  border-radius: var(--radius-sm); padding: 9px 12px; font-size: 14px;
+}
+.setting-group .row { display: flex; gap: 8px; align-items: center; }
+.setting-group .row input { flex: 1; }
+.setting-group .btn {
+  padding: 9px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent);
+}
+.setting-group .btn.primary { background: var(--accent); color: white; }
+.setting-group .btn.danger  { background: #fce8e6; color: var(--danger); }
+.setting-group .btn.small   { padding: 6px 10px; font-size: 12px; }
+.setting-group .item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px dashed var(--border);
+}
+.setting-group .item:last-child { border-bottom: none; }
+.setting-group .item .info { flex: 1; font-size: 13px; }
+.setting-group .item .sub { font-size: 11px; color: var(--text-3); }
+
+.toggle { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }
+.toggle .sw {
+  width: 42px; height: 24px; background: var(--border-strong); border-radius: 12px;
+  position: relative; transition: background .15s;
+}
+.toggle .sw::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; background: white; border-radius: 50%;
+  transition: transform .15s;
+}
+.toggle.on .sw { background: var(--accent); }
+.toggle.on .sw::after { transform: translateX(18px); }
+
+.chips-edit { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 10px; font-size: 12px; background: var(--surface-2);
+  border-radius: 999px;
+}
+.chip-tag .x { font-size: 14px; color: var(--text-3); cursor: pointer; padding: 0 2px; }
+
+.warn-banner {
+  background: var(--warn-bg); color: var(--warn);
+  padding: 8px 12px; font-size: 12px; border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+/* ============ MODAL ============ */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 100;
+}
+.modal-bg.center { align-items: center; padding: 16px; }
+.modal {
+  background: var(--surface); width: 100%; max-width: 480px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 18px 16px calc(18px + var(--safe-bottom));
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-bg.center .modal { border-radius: var(--radius); }
+.modal h2 { font-size: 16px; margin: 0 0 12px; }
+.modal .modal-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ TAB: RECORD (CHAT) ============ -->
+  <section id="tab-record" class="tab active">
+    <header class="topbar">
+      <h1>บัญชี</h1>
+      <button id="btn-today" class="link-btn">วันนี้</button>
+    </header>
+    <div id="chat-list">
+      <div class="chat-empty">เริ่มบันทึกด้วยการพิมพ์ เช่น<br><em>"ข้าวเที่ยง 60"</em> หรือแนบสลิป 📎</div>
+    </div>
+    <div class="composer">
+      <button id="btn-attach" class="icon-btn" title="แนบสลิป">📎</button>
+      <textarea id="chat-input" rows="1" placeholder="พิมพ์รายการ..."></textarea>
+      <button id="btn-form" class="icon-btn" title="กรอกเอง">📝</button>
+      <button id="btn-send" class="send" disabled>ส่ง</button>
+    </div>
+  </section>
+
+  <!-- ============ TAB: REPORTS ============ -->
+  <section id="tab-reports" class="tab">
+    <header class="topbar">
+      <h1>รายงาน</h1>
+      <button id="btn-export" class="link-btn">Export CSV</button>
+    </header>
+    <div class="reports-scroll">
+      <div class="month-nav">
+        <button id="btn-prev-month">‹</button>
+        <span class="label" id="month-label">—</span>
+        <button id="btn-next-month">›</button>
+      </div>
+
+      <div class="summary">
+        <div class="card inc"><div class="lbl">รายรับ</div><div class="val" id="sum-inc">0</div></div>
+        <div class="card exp"><div class="lbl">รายจ่าย</div><div class="val" id="sum-exp">0</div></div>
+        <div class="card bal"><div class="lbl">คงเหลือ</div><div class="val" id="sum-bal">0</div></div>
+      </div>
+
+      <div class="chart-card">
+        <h3>รายจ่ายตามหมวด</h3>
+        <div id="pie-area" class="pie-wrap"><div class="empty">ยังไม่มีรายจ่าย</div></div>
+      </div>
+
+      <div class="chart-card">
+        <h3>6 เดือนล่าสุด</h3>
+        <div id="bar-area" class="bar-wrap"><div class="empty">—</div></div>
+      </div>
+
+      <div class="filter-bar" id="filter-bar">
+        <button class="chip on" data-filter="all">ทั้งหมด</button>
+        <button class="chip" data-filter="expense">รายจ่าย</button>
+        <button class="chip" data-filter="income">รายรับ</button>
+      </div>
+
+      <div id="report-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: SETTINGS ============ -->
+  <section id="tab-settings" class="tab">
+    <header class="topbar">
+      <h1>ตั้งค่า</h1>
+    </header>
+    <div class="settings-scroll">
+
+      <div class="setting-group">
+        <h3>Anthropic API Key</h3>
+        <p class="hint">key เก็บใน browser ของคุณเท่านั้น (localStorage) ไม่ส่งไปไหนนอกจาก Anthropic API โดยตรง — ผู้ที่เข้าถึง browser นี้อาจอ่าน key ได้</p>
+        <div class="row">
+          <input type="password" id="api-key" placeholder="sk-ant-...">
+          <button class="btn primary" id="save-key">บันทึก</button>
+        </div>
+        <label>Model</label>
+        <select id="model-select">
+          <option value="claude-haiku-4-5">Haiku 4.5 (เร็ว/ถูก — แนะนำ)</option>
+          <option value="claude-sonnet-4-6">Sonnet 4.6 (แม่นยำขึ้น)</option>
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <h3>บัญชีของฉัน</h3>
+        <p class="hint">ใส่ 4 หลักท้ายของบัญชี เพื่อให้ระบบเดาทิศทาง (โอนออก/รับเข้า) จากสลิปได้</p>
+        <div id="my-accounts-list"></div>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="acc-bank" placeholder="ธนาคาร เช่น KBank" style="flex:1">
+          <input type="text" id="acc-last4" placeholder="4 หลัก" inputmode="numeric" maxlength="4" style="width:80px">
+          <button class="btn" id="add-acc">เพิ่ม</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h3>หมวดรายจ่าย</h3>
+        <div class="chips-edit" id="cat-exp"></div>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="new-cat-exp" placeholder="ชื่อหมวดใหม่">
+          <button class="btn small" id="add-cat-exp">เพิ่ม</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h3>หมวดรายรับ</h3>
+        <div class="chips-edit" id="cat-inc"></div>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="new-cat-inc" placeholder="ชื่อหมวดใหม่">
+          <button class="btn small" id="add-cat-inc">เพิ่ม</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h3>อื่น ๆ</h3>
+        <div class="toggle" id="toggle-thumb">
+          <div>
+            <div>เก็บ thumbnail สลิป</div>
+            <div class="sub" style="font-size:11px;color:var(--text-3)">เก็บภาพย่อ ~300px ใน IndexedDB เพื่อ audit</div>
+          </div>
+          <div class="sw"></div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h3>ข้อมูล</h3>
+        <button class="btn" id="export-json" style="margin-right:6px">Export JSON</button>
+        <button class="btn danger" id="clear-data">ล้างข้อมูลทั้งหมด</button>
+      </div>
+
+      <div style="text-align:center; font-size:11px; color:var(--text-3); padding:8px">v1.0 · single-file PWA</div>
+    </div>
+  </section>
+
+  <!-- ============ BOTTOM NAV ============ -->
+  <nav class="bottomnav">
+    <button data-tab="record" class="active"><span class="nav-icon">💬</span><span>บันทึก</span></button>
+    <button data-tab="reports"><span class="nav-icon">📊</span><span>รายงาน</span></button>
+    <button data-tab="settings"><span class="nav-icon">⚙️</span><span>ตั้งค่า</span></button>
+  </nav>
+
+</div>
+
+<input type="file" id="slip-file" accept="image/*" capture="environment" hidden>
+<div id="modal-root"></div>
+
+<script>
+'use strict';
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const DEFAULT_CATS = {
+  expense: ['อาหาร','เดินทาง','ของใช้','บิล','ช้อปปิ้ง','สุขภาพ','บันเทิง','โอน','อื่นๆ'],
+  income:  ['เงินเดือน','โบนัส','รายรับอื่น']
+};
+const SETTINGS_KEY = 'budget-settings-v1';
+
+// ============================================================
+// IndexedDB wrapper
+// ============================================================
+const DB_NAME = 'budget-app';
+const DB_VER = 1;
+let _db = null;
+
+function openDB() {
+  if (_db) return Promise.resolve(_db);
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('tx')) {
+        const s = db.createObjectStore('tx', { keyPath: 'id' });
+        s.createIndex('date', 'date');
+        s.createIndex('type', 'type');
+        s.createIndex('hash', 'slip_hash');
+      }
+    };
+    req.onsuccess = () => { _db = req.result; res(_db); };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+async function txAdd(tx) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const t = db.transaction('tx', 'readwrite');
+    t.objectStore('tx').put(tx);
+    t.oncomplete = () => res(tx);
+    t.onerror = () => rej(t.error);
+  });
+}
+async function txDelete(id) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const t = db.transaction('tx', 'readwrite');
+    t.objectStore('tx').delete(id);
+    t.oncomplete = res; t.onerror = () => rej(t.error);
+  });
+}
+async function txAll() {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const t = db.transaction('tx', 'readonly');
+    const req = t.objectStore('tx').getAll();
+    req.onsuccess = () => res(req.result || []);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function txFindByHash(hash) {
+  if (!hash) return null;
+  const db = await openDB();
+  return new Promise((res) => {
+    const t = db.transaction('tx', 'readonly');
+    const req = t.objectStore('tx').index('hash').get(hash);
+    req.onsuccess = () => res(req.result || null);
+    req.onerror = () => res(null);
+  });
+}
+
+async function clearAllData() {
+  const db = await openDB();
+  return new Promise((res) => {
+    const t = db.transaction('tx', 'readwrite');
+    t.objectStore('tx').clear();
+    t.oncomplete = res;
+  });
+}
+
+// ============================================================
+// Settings (localStorage)
+// ============================================================
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (!s.categories) s.categories = structuredClone(DEFAULT_CATS);
+      if (!s.my_accounts) s.my_accounts = [];
+      if (typeof s.keep_thumb !== 'boolean') s.keep_thumb = false;
+      if (!s.model) s.model = 'claude-haiku-4-5';
+      return s;
+    }
+  } catch (e) {}
+  return {
+    api_key: '',
+    model: 'claude-haiku-4-5',
+    my_accounts: [],
+    categories: structuredClone(DEFAULT_CATS),
+    keep_thumb: false,
+  };
+}
+function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); }
+
+// ============================================================
+// Utilities
+// ============================================================
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'x'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+}
+function fmtMoney(n) {
+  if (n == null || isNaN(n)) return '—';
+  return (Math.round(n*100)/100).toLocaleString('th-TH', {minimumFractionDigits: n%1?2:0, maximumFractionDigits: 2});
+}
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('th-TH', {day:'numeric', month:'short'}) + ' ' +
+         d.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+}
+function fmtDateShort(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
+}
+function dayKey(iso) {
+  const d = new Date(iso);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function dayLabel(iso) {
+  const d = new Date(iso);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const that = new Date(d); that.setHours(0,0,0,0);
+  const diff = Math.round((today - that) / 86400000);
+  if (diff === 0) return 'วันนี้';
+  if (diff === 1) return 'เมื่อวาน';
+  return d.toLocaleDateString('th-TH', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+}
+function monthKey(iso) {
+  const d = new Date(iso);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function monthLabel(ym) {
+  const [y,m] = ym.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString('th-TH', {month:'long', year:'numeric'});
+}
+function nowIso() { return new Date().toISOString(); }
+function toLocalInput(iso) {
+  // returns yyyy-MM-ddTHH:mm in local time for input[type=datetime-local]
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+function fromLocalInput(v) {
+  if (!v) return nowIso();
+  return new Date(v).toISOString();
+}
+
+// Hash for dedup
+async function sha1(str) {
+  const buf = new TextEncoder().encode(str);
+  const h = await crypto.subtle.digest('SHA-1', buf);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function computeSlipHash(parsed) {
+  const k = (parsed.slip_ref_no || '') + '|' + Math.round((parsed.amount||0)*100) + '|' + (parsed.date || '').slice(0,10) + '|' + (parsed.slip_account_tail || '');
+  return await sha1(k);
+}
+
+// ============================================================
+// Image utils (for slip thumbnail + base64 for API)
+// ============================================================
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const dataUrl = r.result;
+      const comma = dataUrl.indexOf(',');
+      res({ b64: dataUrl.slice(comma+1), media_type: file.type || 'image/jpeg', dataUrl });
+    };
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+async function makeThumb(file, max=300) {
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = URL.createObjectURL(file);
+  });
+  const scale = Math.min(1, max / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  cv.getContext('2d').drawImage(img, 0, 0, w, h);
+  return await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.78));
+}
+
+// ============================================================
+// Claude API
+// ============================================================
+const API_URL = 'https://api.anthropic.com/v1/messages';
+
+function txTool(categories) {
+  return {
+    name: 'record_transaction',
+    description: 'Record a parsed financial transaction from the user',
+    input_schema: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', description: 'Amount in THB, positive' },
+        type: { type: 'string', enum: ['expense','income'], description: 'Direction' },
+        category: { type: 'string', description: 'One of the provided categories. If unsure, pick "อื่นๆ" for expense or "รายรับอื่น" for income.' },
+        note: { type: 'string', description: 'Short note, cleaned from user input' },
+        date: { type: 'string', description: 'ISO datetime; if user didn\'t specify, use the provided "now"' },
+        confidence: { type: 'number', description: '0..1 — how confident this parse is' }
+      },
+      required: ['amount','type','category','note','date']
+    }
+  };
+}
+
+function slipTool(categories) {
+  return {
+    name: 'record_slip',
+    description: 'Extract structured data from a Thai bank transfer slip image',
+    input_schema: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', description: 'Amount in THB' },
+        date: { type: 'string', description: 'ISO datetime of the transaction (from slip)' },
+        ref_no: { type: 'string', description: 'Reference number / รหัสอ้างอิง' },
+        bank: { type: 'string', description: 'Bank name (KBank, SCB, BBL, Krungthai, BAY, TTB, GSB, etc.)' },
+        sender_name: { type: 'string', description: 'Name of sender (จาก)' },
+        sender_account_tail: { type: 'string', description: 'Last 4 digits of sender account' },
+        recipient_name: { type: 'string', description: 'Name of recipient (ไปยัง)' },
+        recipient_account_tail: { type: 'string', description: 'Last 4 digits of recipient account' },
+        category_guess: { type: 'string', description: 'Best guess category from the user list' },
+        confidence: { type: 'number', description: '0..1' }
+      },
+      required: ['amount']
+    }
+  };
+}
+
+async function callClaude(body) {
+  const key = state.settings.api_key;
+  if (!key) throw new Error('ยังไม่ได้ตั้งค่า API key — ไปที่ ตั้งค่า > Anthropic API Key');
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    let msg = 'API error '+res.status;
+    try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch(_){}
+    throw new Error(msg);
+  }
+  return await res.json();
+}
+
+function extractTool(resp, name) {
+  if (!resp || !resp.content) return null;
+  for (const c of resp.content) {
+    if (c.type === 'tool_use' && (!name || c.name === name)) return c.input;
+  }
+  return null;
+}
+
+async function parseNL(text) {
+  const cats = state.settings.categories;
+  const sys = `คุณคือตัวช่วยแยกประโยคไทยเป็นรายการบัญชี (รายรับ/รายจ่าย).
+- รายการในไทย "บาท" คือ THB
+- ถ้าผู้ใช้ไม่ได้ระบุวันเวลา ให้ใช้ "now" ที่ระบบส่งมา
+- เลือก type:
+  * รายจ่าย (expense) เป็น default — ส่วนใหญ่คนจดเพราะใช้เงิน
+  * รายรับ (income) เมื่อมีคำว่า "ได้", "เงินเดือน", "โบนัส", "คืน", "รับ", "ขาย" ที่ชัดเจน
+- category ต้องเลือกจาก list นี้เท่านั้น:
+  expense: ${cats.expense.join(', ')}
+  income: ${cats.income.join(', ')}
+- note: สรุปสั้นจากสิ่งที่ผู้ใช้พิมพ์ (ทำให้สะอาด)
+- confidence: ถ้า amount ไม่ชัด ให้ต่ำกว่า 0.6`;
+
+  const body = {
+    model: state.settings.model,
+    max_tokens: 512,
+    system: sys,
+    tools: [txTool(cats)],
+    tool_choice: { type: 'tool', name: 'record_transaction' },
+    messages: [{
+      role: 'user',
+      content: `now=${nowIso()}\nuser: ${text}`
+    }]
+  };
+  const r = await callClaude(body);
+  const t = extractTool(r, 'record_transaction');
+  if (!t) throw new Error('AI ตอบไม่เข้า format ที่คาดไว้');
+  return t;
+}
+
+async function parseSlip(file) {
+  const cats = state.settings.categories;
+  const { b64, media_type } = await fileToBase64(file);
+  const sys = `คุณกำลังอ่านสลิปโอนเงิน/ใบเสร็จจากธนาคารไทย (KBank, SCB, BBL, Krungthai, BAY, TTB, GSB, ฯลฯ).
+- ดึง: amount, date (ISO), ref_no, bank ของผู้โอน, ชื่อผู้โอน/4 หลักท้าย, ชื่อผู้รับ/4 หลักท้าย
+- ถ้าฟิลด์ใดอ่านไม่ได้ให้เว้น
+- category_guess: ดูจาก context (เช่น 7-ELEVEN → ของใช้, ร้านอาหาร → อาหาร, ค่าน้ำ/ไฟ → บิล) จาก list:
+  expense: ${cats.expense.join(', ')}`;
+
+  const body = {
+    model: state.settings.model,
+    max_tokens: 768,
+    system: sys,
+    tools: [slipTool(cats)],
+    tool_choice: { type: 'tool', name: 'record_slip' },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type, data: b64 } },
+        { type: 'text', text: 'อ่านสลิปและกรอกข้อมูลผ่าน tool record_slip' }
+      ]
+    }]
+  };
+  const r = await callClaude(body);
+  const t = extractTool(r, 'record_slip');
+  if (!t) throw new Error('อ่านสลิปไม่ได้');
+  return t;
+}
+
+// Convert slip parse → transaction draft (resolve direction via my_accounts)
+function slipToDraft(s) {
+  const my = state.settings.my_accounts || [];
+  let type = 'expense';
+  if (my.some(a => a.last4 && (a.last4 === s.recipient_account_tail))) type = 'income';
+  else if (my.some(a => a.last4 && (a.last4 === s.sender_account_tail))) type = 'expense';
+
+  const cats = state.settings.categories;
+  let category;
+  if (type === 'expense') {
+    category = cats.expense.includes(s.category_guess) ? s.category_guess : (cats.expense.includes('โอน') ? 'โอน' : cats.expense[0]);
+  } else {
+    category = cats.income.includes(s.category_guess) ? s.category_guess : (cats.income.find(c=>c.includes('อื่น')) || cats.income[0]);
+  }
+  const otherName = type === 'expense' ? (s.recipient_name || '') : (s.sender_name || '');
+  return {
+    amount: s.amount,
+    type, category,
+    date: s.date || nowIso(),
+    note: otherName ? `โอน → ${otherName}` : 'โอน',
+    source: 'slip',
+    slip_ref_no: s.ref_no || '',
+    slip_bank: s.bank || '',
+    slip_counterparty: otherName,
+    slip_account_tail: type === 'expense' ? (s.recipient_account_tail || '') : (s.sender_account_tail || ''),
+    confidence: s.confidence ?? 0.8
+  };
+}
+
+// ============================================================
+// APP STATE
+// ============================================================
+const state = {
+  settings: loadSettings(),
+  transactions: [],
+  currentTab: 'record',
+  viewMonth: monthKey(nowIso()),
+  reportFilter: 'all',
+};
+
+// ============================================================
+// CHAT / RECORD TAB
+// ============================================================
+const chatList = document.getElementById('chat-list');
+const chatInput = document.getElementById('chat-input');
+const btnSend = document.getElementById('btn-send');
+const btnAttach = document.getElementById('btn-attach');
+const btnForm = document.getElementById('btn-form');
+const slipFile = document.getElementById('slip-file');
+
+function clearChat() { chatList.innerHTML = ''; }
+function renderChatEmpty() {
+  if (state.transactions.length === 0) {
+    chatList.innerHTML = '<div class="chat-empty">เริ่มบันทึกด้วยการพิมพ์ เช่น<br><em>"ข้าวเที่ยง 60"</em> หรือแนบสลิป 📎</div>';
+  }
+}
+
+function renderChatList() {
+  clearChat();
+  if (state.transactions.length === 0) { renderChatEmpty(); return; }
+  // Chat order: oldest at top, newest at bottom
+  const sorted = state.transactions.slice().sort((a,b) => new Date(a.date) - new Date(b.date));
+  let lastDay = null;
+  for (const tx of sorted) {
+    const dk = dayKey(tx.date);
+    if (dk !== lastDay) {
+      const sep = document.createElement('div');
+      sep.className = 'day-sep';
+      sep.textContent = dayLabel(tx.date);
+      chatList.appendChild(sep);
+      lastDay = dk;
+    }
+    chatList.appendChild(renderBubble(tx));
+  }
+  // scroll to bottom
+  requestAnimationFrame(() => { chatList.scrollTop = chatList.scrollHeight; });
+}
+
+function renderBubble(tx) {
+  const el = document.createElement('div');
+  el.className = 'bubble ' + tx.type;
+  el.dataset.id = tx.id;
+  const dirSign = tx.type === 'expense' ? '-' : '+';
+  el.innerHTML = `
+    <div class="row-1">
+      <span class="amount ${tx.type}">${dirSign}${fmtMoney(tx.amount)}</span>
+      <span class="cat-chip">${escapeHtml(tx.category||'')}</span>
+    </div>
+    ${tx.note ? `<div class="note">${escapeHtml(tx.note)}</div>` : ''}
+    <div class="meta">${fmtDate(tx.date)} ${tx.source === 'slip' ? '· 📎' : tx.source === 'nl' ? '· 💬' : '· 📝'}${tx.slip_ref_no ? ' · ref '+escapeHtml(tx.slip_ref_no) : ''}</div>
+    ${tx.confidence != null && tx.confidence < 0.6 ? '<div class="confidence-warn">⚠ AI ไม่มั่นใจ ตรวจให้ดี</div>' : ''}
+  `;
+  el.addEventListener('click', () => editBubble(tx));
+  return el;
+}
+
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ----- Loading bubble -----
+function appendLoading(text) {
+  const el = document.createElement('div');
+  el.className = 'bubble loading';
+  el.innerHTML = `<span class="loading-dots">${escapeHtml(text)}</span>`;
+  chatList.appendChild(el);
+  chatList.scrollTop = chatList.scrollHeight;
+  return el;
+}
+function appendError(text) {
+  const el = document.createElement('div');
+  el.className = 'bubble error';
+  el.textContent = '⚠ ' + text;
+  chatList.appendChild(el);
+  chatList.scrollTop = chatList.scrollHeight;
+  setTimeout(() => el.remove(), 6000);
+}
+
+// ----- Editable bubble (confirm) -----
+function appendEditableDraft(draft, opts = {}) {
+  // Remove empty-state if present
+  const empty = chatList.querySelector('.chat-empty');
+  if (empty) empty.remove();
+
+  const el = buildEditableEl(draft, { isNew: true, dup: opts.dup, thumbDataUrl: opts.thumbDataUrl });
+  chatList.appendChild(el);
+  chatList.scrollTop = chatList.scrollHeight;
+  return el;
+}
+function editBubble(tx) {
+  const node = chatList.querySelector(`.bubble[data-id="${tx.id}"]`);
+  if (!node) return;
+  const el = buildEditableEl(tx, { isNew: false });
+  node.replaceWith(el);
+}
+
+function buildEditableEl(draft, { isNew, dup, thumbDataUrl }) {
+  const el = document.createElement('div');
+  el.className = 'bubble editing ' + (draft.type || 'expense');
+  if (draft.id) el.dataset.id = draft.id;
+
+  const cats = state.settings.categories;
+  const cat = draft.category || (draft.type === 'income' ? cats.income[0] : cats.expense[0]);
+  const dateLocal = toLocalInput(draft.date || nowIso());
+
+  el.innerHTML = `
+    ${thumbDataUrl ? `<img class="thumb" src="${thumbDataUrl}" alt="สลิป">` : ''}
+    ${draft.slip_thumbnail_url ? `<img class="thumb" src="${draft.slip_thumbnail_url}" alt="สลิป">` : ''}
+    ${dup ? `<div class="dup-warn">⚠ มีรายการคล้ายในระบบ (ref ${escapeHtml(dup.slip_ref_no||'-')}, ${fmtMoney(dup.amount)} บ., ${fmtDateShort(dup.date)})</div>` : ''}
+    <div class="edit-grid">
+      <label>ทิศทาง</label>
+      <div class="type-toggle" data-field="type">
+        <button type="button" data-v="expense" class="${draft.type==='expense'?'on expense':''}">รายจ่าย</button>
+        <button type="button" data-v="income" class="${draft.type==='income'?'on income':''}">รายรับ</button>
+      </div>
+      <label>จำนวน</label>
+      <input type="number" inputmode="decimal" step="0.01" data-field="amount" value="${draft.amount ?? ''}" placeholder="0.00">
+      <label>หมวด</label>
+      <select data-field="category"></select>
+      <label>วันเวลา</label>
+      <input type="datetime-local" data-field="date" value="${dateLocal}">
+      <label>โน้ต</label>
+      <input type="text" data-field="note" value="${escapeHtml(draft.note||'')}" placeholder="">
+    </div>
+    <div class="actions">
+      ${!isNew ? '<button class="delete" type="button">ลบ</button>' : ''}
+      <button class="cancel" type="button">${isNew ? 'ยกเลิก' : 'ปิด'}</button>
+      <button class="save" type="button">บันทึก</button>
+    </div>
+  `;
+
+  const sel = el.querySelector('select[data-field="category"]');
+  function refillCats() {
+    const t = el.querySelector('.type-toggle button.on').dataset.v;
+    sel.innerHTML = cats[t].map(c => `<option value="${escapeHtml(c)}" ${c===cat?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  }
+  refillCats();
+  // re-pick after refill if available
+  if (Array.from(sel.options).some(o => o.value === cat)) sel.value = cat;
+
+  el.querySelectorAll('.type-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('on','expense','income'));
+      btn.classList.add('on', btn.dataset.v);
+      el.classList.toggle('expense', btn.dataset.v === 'expense');
+      el.classList.toggle('income', btn.dataset.v === 'income');
+      refillCats();
+    });
+  });
+
+  el.querySelector('.cancel').addEventListener('click', () => {
+    if (isNew) el.remove();
+    else { renderChatList(); refreshReports(); }
+  });
+  if (!isNew) {
+    el.querySelector('.delete').addEventListener('click', async () => {
+      if (!confirm('ลบรายการนี้?')) return;
+      await txDelete(draft.id);
+      state.transactions = state.transactions.filter(x => x.id !== draft.id);
+      renderChatList(); refreshReports();
+    });
+  }
+  el.querySelector('.save').addEventListener('click', async () => {
+    const amount = parseFloat(el.querySelector('[data-field="amount"]').value);
+    if (!amount || amount <= 0) { alert('ใส่จำนวนเงินที่ถูกต้อง'); return; }
+    const type = el.querySelector('.type-toggle button.on').dataset.v;
+    const category = sel.value;
+    const date = fromLocalInput(el.querySelector('[data-field="date"]').value);
+    const note = el.querySelector('[data-field="note"]').value.trim();
+
+    const merged = { ...draft, amount, type, category, date, note,
+      id: draft.id || uuid(),
+      source: draft.source || 'form',
+      created_at: draft.created_at || nowIso(),
+      updated_at: nowIso(),
+    };
+    await txAdd(merged);
+    // update in-memory
+    const idx = state.transactions.findIndex(x => x.id === merged.id);
+    if (idx >= 0) state.transactions[idx] = merged;
+    else state.transactions.push(merged);
+    renderChatList(); refreshReports();
+  });
+
+  return el;
+}
+
+// ----- Send NL -----
+async function sendNL() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = '';
+  autoResize();
+  btnSend.disabled = true;
+
+  // Show user's raw text as system note + loading
+  const sysEl = document.createElement('div');
+  sysEl.className = 'bubble system';
+  sysEl.textContent = '"'+text+'"';
+  chatList.appendChild(sysEl);
+
+  const loading = appendLoading('กำลังคิด');
+  try {
+    const parsed = await parseNL(text);
+    loading.remove();
+    appendEditableDraft({
+      amount: parsed.amount,
+      type: parsed.type || 'expense',
+      category: parsed.category,
+      date: parsed.date || nowIso(),
+      note: parsed.note || text,
+      source: 'nl',
+      confidence: parsed.confidence ?? 0.85,
+    });
+  } catch (e) {
+    loading.remove();
+    appendError(e.message);
+  }
+}
+
+// ----- Attach slip -----
+async function attachSlip(file) {
+  if (!file) return;
+  const loading = appendLoading('กำลังอ่านสลิป');
+  try {
+    const parsed = await parseSlip(file);
+    const draft = slipToDraft(parsed);
+
+    // dedup
+    draft.slip_hash = await computeSlipHash(draft);
+    const dup = await txFindByHash(draft.slip_hash);
+
+    // optional thumbnail
+    let thumbDataUrl = null;
+    if (state.settings.keep_thumb) {
+      const blob = await makeThumb(file);
+      draft.slip_thumbnail = blob;
+      thumbDataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+    } else {
+      // preview-only thumbnail (not stored)
+      const blob = await makeThumb(file, 240);
+      thumbDataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+    }
+    loading.remove();
+    appendEditableDraft(draft, { dup, thumbDataUrl });
+  } catch (e) {
+    loading.remove();
+    appendError(e.message);
+  }
+}
+
+// ----- Manual form -----
+function openManualForm() {
+  const empty = chatList.querySelector('.chat-empty');
+  if (empty) empty.remove();
+  const draft = {
+    amount: '', type: 'expense',
+    category: state.settings.categories.expense[0],
+    date: nowIso(),
+    note: '',
+    source: 'form',
+  };
+  const el = buildEditableEl(draft, { isNew: true });
+  chatList.appendChild(el);
+  chatList.scrollTop = chatList.scrollHeight;
+  el.querySelector('[data-field="amount"]').focus();
+}
+
+// ----- Composer wiring -----
+function autoResize() {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(120, chatInput.scrollHeight) + 'px';
+}
+chatInput.addEventListener('input', () => {
+  btnSend.disabled = !chatInput.value.trim();
+  autoResize();
+});
+btnSend.addEventListener('click', sendNL);
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendNL(); }
+});
+btnAttach.addEventListener('click', () => slipFile.click());
+slipFile.addEventListener('change', () => {
+  const f = slipFile.files && slipFile.files[0];
+  slipFile.value = '';
+  if (f) attachSlip(f);
+});
+btnForm.addEventListener('click', openManualForm);
+document.getElementById('btn-today').addEventListener('click', () => {
+  chatList.scrollTop = chatList.scrollHeight;
+});
+
+// ============================================================
+// REPORTS TAB
+// ============================================================
+const PIE_COLORS = ['#c44536','#4a6fa5','#2d6a4f','#c47b1d','#7b5ea7','#3a8580','#b03060','#7d6852','#5a8f3a','#3f5b8a','#a04a1c'];
+
+function refreshReports() {
+  document.getElementById('month-label').textContent = monthLabel(state.viewMonth);
+  const inMonth = state.transactions.filter(t => monthKey(t.date) === state.viewMonth);
+  const inc = inMonth.filter(t => t.type === 'income').reduce((s,t) => s + (+t.amount||0), 0);
+  const exp = inMonth.filter(t => t.type === 'expense').reduce((s,t) => s + (+t.amount||0), 0);
+  document.getElementById('sum-inc').textContent = fmtMoney(inc);
+  document.getElementById('sum-exp').textContent = fmtMoney(exp);
+  document.getElementById('sum-bal').textContent = fmtMoney(inc - exp);
+
+  // Pie: expense by category
+  const byCat = {};
+  inMonth.filter(t => t.type === 'expense').forEach(t => {
+    byCat[t.category] = (byCat[t.category] || 0) + (+t.amount||0);
+  });
+  renderPie(byCat, exp);
+  renderBar();
+  renderReportList(inMonth);
+}
+
+function renderPie(byCat, total) {
+  const area = document.getElementById('pie-area');
+  const entries = Object.entries(byCat).sort((a,b) => b[1]-a[1]);
+  if (entries.length === 0 || total === 0) {
+    area.innerHTML = '<div class="empty">ยังไม่มีรายจ่ายเดือนนี้</div>';
+    return;
+  }
+  const cx = 65, cy = 65, r = 58;
+  let angle = -Math.PI/2;
+  const slices = entries.map(([name, val], i) => {
+    const frac = val / total;
+    const a2 = angle + frac * Math.PI * 2;
+    const x1 = cx + r*Math.cos(angle), y1 = cy + r*Math.sin(angle);
+    const x2 = cx + r*Math.cos(a2),   y2 = cy + r*Math.sin(a2);
+    const large = frac > 0.5 ? 1 : 0;
+    const path = `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`;
+    angle = a2;
+    return { name, val, frac, path, color: PIE_COLORS[i % PIE_COLORS.length] };
+  });
+  const svg = `<svg viewBox="0 0 130 130">${slices.map(s => `<path d="${s.path}" fill="${s.color}" />`).join('')}</svg>`;
+  const legend = '<div class="pie-legend">' + slices.map(s => `
+    <div class="item">
+      <span class="sw" style="background:${s.color}"></span>
+      <span class="name">${escapeHtml(s.name)}</span>
+      <span class="amt">${fmtMoney(s.val)}</span>
+      <span class="pct">${Math.round(s.frac*100)}%</span>
+    </div>`).join('') + '</div>';
+  area.className = 'pie-wrap';
+  area.innerHTML = svg + legend;
+}
+
+function renderBar() {
+  const area = document.getElementById('bar-area');
+  // last 6 months ending at viewMonth
+  const [yy,mm] = state.viewMonth.split('-').map(Number);
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(yy, mm-1-i, 1);
+    months.push({ key: d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),
+                  label: d.toLocaleDateString('th-TH', {month:'short'}) });
+  }
+  const data = months.map(m => {
+    const ts = state.transactions.filter(t => monthKey(t.date) === m.key);
+    return {
+      label: m.label, key: m.key,
+      inc: ts.filter(t=>t.type==='income').reduce((s,t)=>s+(+t.amount||0),0),
+      exp: ts.filter(t=>t.type==='expense').reduce((s,t)=>s+(+t.amount||0),0),
+    };
+  });
+  const max = Math.max(1, ...data.flatMap(d => [d.inc, d.exp]));
+  const W = 340, H = 170, padL = 30, padB = 26, padT = 10, padR = 8;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const groupW = innerW / data.length;
+  const barW = (groupW - 6) / 2;
+  const bars = data.map((d, i) => {
+    const x = padL + i * groupW + 3;
+    const hInc = (d.inc/max) * innerH;
+    const hExp = (d.exp/max) * innerH;
+    return `
+      <rect x="${x}" y="${padT + innerH - hExp}" width="${barW}" height="${hExp}" fill="#c44536"/>
+      <rect x="${x+barW}" y="${padT + innerH - hInc}" width="${barW}" height="${hInc}" fill="#2d6a4f"/>
+      <text x="${x + barW}" y="${H-10}" text-anchor="middle" font-size="10" fill="#6b6660">${d.label}</text>
+    `;
+  }).join('');
+  const baseline = `<line x1="${padL}" y1="${padT+innerH}" x2="${W-padR}" y2="${padT+innerH}" stroke="#d4cdc0" stroke-width="1"/>`;
+  const maxLbl = `<text x="${padL-4}" y="${padT+8}" text-anchor="end" font-size="9" fill="#a39c93">${fmtMoney(max)}</text>`;
+  area.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${baseline}${maxLbl}${bars}</svg>
+    <div style="display:flex;gap:14px;justify-content:center;margin-top:6px;font-size:11px;color:var(--text-2)">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#c44536;border-radius:2px"></span> รายจ่าย</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#2d6a4f;border-radius:2px"></span> รายรับ</span>
+    </div>`;
+}
+
+function renderReportList(items) {
+  const list = document.getElementById('report-list');
+  let filtered = items.slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+  if (state.reportFilter === 'expense') filtered = filtered.filter(t => t.type === 'expense');
+  if (state.reportFilter === 'income')  filtered = filtered.filter(t => t.type === 'income');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding:18px;text-align:center;color:var(--text-3);font-size:13px">ไม่มีรายการ</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(t => `
+    <div class="report-row" data-id="${t.id}">
+      <div class="dir-pill ${t.type}"></div>
+      <div class="col-1">
+        <div class="top"><span class="cat">${escapeHtml(t.category||'')}</span><span class="date">${fmtDateShort(t.date)}</span></div>
+        ${t.note ? `<div class="note">${escapeHtml(t.note)}</div>` : ''}
+      </div>
+      <div class="amount ${t.type}">${t.type==='expense'?'-':'+'}${fmtMoney(t.amount)}</div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.report-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = row.dataset.id;
+      const tx = state.transactions.find(x => x.id === id);
+      if (!tx) return;
+      switchTab('record');
+      renderChatList();
+      requestAnimationFrame(() => {
+        const node = chatList.querySelector(`.bubble[data-id="${id}"]`);
+        if (node) { node.scrollIntoView({block:'center'}); editBubble(tx); }
+      });
+    });
+  });
+}
+
+document.getElementById('btn-prev-month').addEventListener('click', () => {
+  const [y,m] = state.viewMonth.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  state.viewMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  refreshReports();
+});
+document.getElementById('btn-next-month').addEventListener('click', () => {
+  const [y,m] = state.viewMonth.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  state.viewMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  refreshReports();
+});
+document.getElementById('filter-bar').addEventListener('click', (e) => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  document.querySelectorAll('#filter-bar .chip').forEach(c => c.classList.remove('on'));
+  b.classList.add('on');
+  state.reportFilter = b.dataset.filter;
+  refreshReports();
+});
+
+// Export CSV
+document.getElementById('btn-export').addEventListener('click', () => {
+  const inMonth = state.transactions.filter(t => monthKey(t.date) === state.viewMonth)
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+  const headers = ['date','type','amount','category','note','source','slip_ref_no','slip_bank','slip_counterparty'];
+  const rows = inMonth.map(t => headers.map(h => csvField(t[h])).join(','));
+  const csv = '﻿' + headers.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `budget-${state.viewMonth}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+function csvField(v) {
+  if (v == null) return '';
+  const s = String(v).replace(/"/g, '""');
+  return /[",\n]/.test(s) ? `"${s}"` : s;
+}
+
+// ============================================================
+// SETTINGS TAB
+// ============================================================
+function renderSettings() {
+  document.getElementById('api-key').value = state.settings.api_key || '';
+  document.getElementById('model-select').value = state.settings.model;
+  document.getElementById('toggle-thumb').classList.toggle('on', !!state.settings.keep_thumb);
+  renderAccounts();
+  renderCatChips('expense');
+  renderCatChips('income');
+}
+function renderAccounts() {
+  const wrap = document.getElementById('my-accounts-list');
+  if (!state.settings.my_accounts.length) {
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-3)">— ยังไม่มี — เพิ่มเพื่อให้ระบบเดาทิศทางสลิปอัตโนมัติ</div>';
+    return;
+  }
+  wrap.innerHTML = state.settings.my_accounts.map((a, i) => `
+    <div class="item">
+      <div class="info">${escapeHtml(a.bank)} <span class="sub">···${escapeHtml(a.last4)}</span></div>
+      <button class="btn small danger" data-i="${i}">ลบ</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('button[data-i]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.settings.my_accounts.splice(+b.dataset.i, 1);
+      saveSettings(); renderAccounts();
+    });
+  });
+}
+function renderCatChips(kind) {
+  const id = kind === 'expense' ? 'cat-exp' : 'cat-inc';
+  const wrap = document.getElementById(id);
+  wrap.innerHTML = state.settings.categories[kind].map((c, i) => `
+    <span class="chip-tag">${escapeHtml(c)}<span class="x" data-i="${i}">×</span></span>
+  `).join('');
+  wrap.querySelectorAll('.x').forEach(x => {
+    x.addEventListener('click', () => {
+      const i = +x.dataset.i;
+      if (state.settings.categories[kind].length <= 1) { alert('ต้องมีอย่างน้อย 1 หมวด'); return; }
+      state.settings.categories[kind].splice(i, 1);
+      saveSettings(); renderCatChips(kind);
+    });
+  });
+}
+
+document.getElementById('save-key').addEventListener('click', () => {
+  state.settings.api_key = document.getElementById('api-key').value.trim();
+  saveSettings();
+  flash('บันทึก key แล้ว');
+});
+document.getElementById('model-select').addEventListener('change', (e) => {
+  state.settings.model = e.target.value; saveSettings();
+});
+document.getElementById('toggle-thumb').addEventListener('click', () => {
+  state.settings.keep_thumb = !state.settings.keep_thumb;
+  saveSettings(); renderSettings();
+});
+document.getElementById('add-acc').addEventListener('click', () => {
+  const bank = document.getElementById('acc-bank').value.trim();
+  const last4 = document.getElementById('acc-last4').value.trim();
+  if (!bank || !/^\d{4}$/.test(last4)) { alert('กรอกธนาคารและ 4 หลักท้าย'); return; }
+  state.settings.my_accounts.push({ bank, last4 });
+  saveSettings();
+  document.getElementById('acc-bank').value = '';
+  document.getElementById('acc-last4').value = '';
+  renderAccounts();
+});
+document.getElementById('add-cat-exp').addEventListener('click', () => {
+  const v = document.getElementById('new-cat-exp').value.trim();
+  if (!v) return;
+  if (!state.settings.categories.expense.includes(v)) state.settings.categories.expense.push(v);
+  saveSettings(); renderCatChips('expense');
+  document.getElementById('new-cat-exp').value = '';
+});
+document.getElementById('add-cat-inc').addEventListener('click', () => {
+  const v = document.getElementById('new-cat-inc').value.trim();
+  if (!v) return;
+  if (!state.settings.categories.income.includes(v)) state.settings.categories.income.push(v);
+  saveSettings(); renderCatChips('income');
+  document.getElementById('new-cat-inc').value = '';
+});
+document.getElementById('clear-data').addEventListener('click', async () => {
+  if (!confirm('ลบรายการทั้งหมด? ทำซ้ำไม่ได้')) return;
+  await clearAllData();
+  state.transactions = [];
+  renderChatList(); refreshReports();
+  flash('ล้างข้อมูลแล้ว');
+});
+document.getElementById('export-json').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state.transactions, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `budget-backup-${Date.now()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+function flash(msg) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:#2d2a26;color:white;padding:9px 16px;border-radius:18px;font-size:13px;z-index:200;opacity:0;transition:opacity .15s';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.style.opacity = '1');
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }, 1500);
+}
+
+// ============================================================
+// TAB NAV
+// ============================================================
+function switchTab(name) {
+  state.currentTab = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.bottomnav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  if (name === 'reports') refreshReports();
+  if (name === 'settings') renderSettings();
+  if (name === 'record') {
+    requestAnimationFrame(() => { chatList.scrollTop = chatList.scrollHeight; });
+  }
+}
+document.querySelectorAll('.bottomnav button').forEach(b => {
+  b.addEventListener('click', () => switchTab(b.dataset.tab));
+});
+
+// ============================================================
+// INIT
+// ============================================================
+(async function init() {
+  try {
+    state.transactions = await txAll();
+  } catch (e) {
+    console.error('DB error', e);
+  }
+  renderChatList();
+  if (!state.settings.api_key) {
+    // gentle nudge: a non-blocking system bubble
+    const empty = chatList.querySelector('.chat-empty');
+    if (empty) empty.insertAdjacentHTML('afterend',
+      '<div class="bubble system">💡 ยังไม่ได้ตั้งค่า API key — ไปที่แท็บ "ตั้งค่า"</div>');
+  }
+
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    try { await navigator.serviceWorker.register('sw.js'); } catch (e) { console.warn('SW register failed', e); }
+  }
+})();
+</script>
+</body>
+</html>
