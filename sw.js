@@ -1,5 +1,5 @@
 // Service worker — cache app shell, never cache API calls.
-const CACHE = 'budget-app-v1';
+const CACHE = 'budget-app-v2';
 const SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (e) => {
