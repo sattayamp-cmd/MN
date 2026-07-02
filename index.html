@@ -277,6 +277,19 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .report-row .amount.expense { color: var(--expense); }
 .report-row .amount.income { color: var(--income); }
 
+.day-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: var(--surface-2);
+  font-size: 12px; border-bottom: 1px solid var(--border);
+}
+.day-header + .report-row { border-top: none; }
+.day-header .dh-label { font-weight: 600; color: var(--text); }
+.day-header .dh-totals { display: flex; gap: 10px; font-weight: 700; }
+.day-header .dh-exp { color: var(--expense); }
+.day-header .dh-inc { color: var(--income); }
+
+.daily-wrap svg { width: 100%; height: 150px; }
+
 /* ============ SETTINGS TAB ============ */
 .settings-scroll { flex: 1; overflow-y: auto; padding: 12px 12px 32px; }
 .setting-group {
@@ -397,6 +410,11 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
       <div class="chart-card">
         <h3>รายจ่ายตามหมวด</h3>
         <div id="pie-area" class="pie-wrap"><div class="empty">ยังไม่มีรายจ่าย</div></div>
+      </div>
+
+      <div class="chart-card">
+        <h3>รายจ่ายรายวัน</h3>
+        <div id="daily-area" class="daily-wrap"><div class="empty">—</div></div>
       </div>
 
       <div class="chart-card">
@@ -1187,6 +1205,7 @@ function refreshReports() {
     byCat[t.category] = (byCat[t.category] || 0) + (+t.amount||0);
   });
   renderPie(byCat, exp);
+  renderDaily(inMonth);
   renderBar();
   renderReportList(inMonth);
 }
@@ -1220,6 +1239,53 @@ function renderPie(byCat, total) {
     </div>`).join('') + '</div>';
   area.className = 'pie-wrap';
   area.innerHTML = svg + legend;
+}
+
+function renderDaily(inMonth) {
+  const area = document.getElementById('daily-area');
+  const [yy, mm] = state.viewMonth.split('-').map(Number);
+  const daysInMonth = new Date(yy, mm, 0).getDate();
+  const dailyExp = new Array(daysInMonth + 1).fill(0);
+  inMonth.forEach(t => {
+    if (t.type !== 'expense') return;
+    const d = new Date(t.date).getDate();
+    dailyExp[d] += +t.amount || 0;
+  });
+  const totalExp = dailyExp.reduce((a,b) => a+b, 0);
+  if (totalExp === 0) { area.innerHTML = '<div class="empty">ยังไม่มีรายจ่ายเดือนนี้</div>'; return; }
+  const max = Math.max(1, ...dailyExp);
+  const W = 340, H = 150, padL = 34, padB = 26, padT = 10, padR = 8;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const barW = innerW / daysInMonth;
+  const today = new Date();
+  const todayDay = (today.getFullYear() === yy && today.getMonth()+1 === mm) ? today.getDate() : -1;
+  const bars = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (dailyExp[d] === 0) continue;
+    const x = padL + (d-1) * barW + 0.5;
+    const h = (dailyExp[d]/max) * innerH;
+    const isToday = d === todayDay;
+    bars.push(`<rect x="${x.toFixed(1)}" y="${(padT + innerH - h).toFixed(1)}" width="${Math.max(1, barW-1).toFixed(1)}" height="${h.toFixed(1)}" fill="${isToday ? '#4a6fa5' : '#c44536'}"><title>${d} · ${fmtMoney(dailyExp[d])}</title></rect>`);
+  }
+  const labels = [];
+  const tickStep = daysInMonth > 20 ? 5 : 3;
+  for (let d = 1; d <= daysInMonth; d += tickStep) {
+    const x = padL + (d-1) * barW + barW/2;
+    labels.push(`<text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#6b6660">${d}</text>`);
+  }
+  const lastTick = 1 + Math.floor((daysInMonth - 1) / tickStep) * tickStep;
+  if (lastTick !== daysInMonth) {
+    const x = padL + (daysInMonth-1) * barW + barW/2;
+    labels.push(`<text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#6b6660">${daysInMonth}</text>`);
+  }
+  const baseline = `<line x1="${padL}" y1="${padT+innerH}" x2="${W-padR}" y2="${padT+innerH}" stroke="#d4cdc0" stroke-width="1"/>`;
+  const maxLbl = `<text x="${padL-4}" y="${padT+8}" text-anchor="end" font-size="9" fill="#a39c93">${fmtMoney(max)}</text>`;
+  const daysActive = dailyExp.filter(v => v > 0).length;
+  const isCurrentMonth = todayDay > 0;
+  const denom = isCurrentMonth ? todayDay : daysInMonth;
+  const avgPerDay = totalExp / denom;
+  area.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${baseline}${maxLbl}${bars.join('')}${labels.join('')}</svg>
+    <div style="text-align:center;margin-top:4px;font-size:11px;color:var(--text-2)">เฉลี่ย <b style="color:var(--text)">${fmtMoney(avgPerDay)}</b> บ./วัน · ใช้จริง ${daysActive} วัน · สูงสุด ${fmtMoney(max)} บ.</div>`;
 }
 
 function renderBar() {
@@ -1264,24 +1330,57 @@ function renderBar() {
     </div>`;
 }
 
+function dayLabelReport(iso) {
+  const d = new Date(iso);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const that = new Date(d); that.setHours(0,0,0,0);
+  const diff = Math.round((today - that) / 86400000);
+  if (diff === 0) return 'วันนี้';
+  if (diff === 1) return 'เมื่อวาน';
+  return d.toLocaleDateString('th-TH', {weekday:'short', day:'numeric', month:'short'});
+}
+
 function renderReportList(items) {
   const list = document.getElementById('report-list');
-  let filtered = items.slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+  let filtered = items.slice();
   if (state.reportFilter === 'expense') filtered = filtered.filter(t => t.type === 'expense');
   if (state.reportFilter === 'income')  filtered = filtered.filter(t => t.type === 'income');
+  filtered.sort((a,b) => new Date(b.date) - new Date(a.date));
   if (filtered.length === 0) {
     list.innerHTML = '<div style="padding:18px;text-align:center;color:var(--text-3);font-size:13px">ไม่มีรายการ</div>';
     return;
   }
-  list.innerHTML = filtered.map(t => `
-    <div class="report-row" data-id="${t.id}">
-      <div class="dir-pill ${t.type}"></div>
-      <div class="col-1">
-        <div class="top"><span class="cat">${escapeHtml(t.category||'')}</span><span class="date">${fmtDateShort(t.date)}</span></div>
-        ${t.note ? `<div class="note">${escapeHtml(t.note)}</div>` : ''}
-      </div>
-      <div class="amount ${t.type}">${t.type==='expense'?'-':'+'}${fmtMoney(t.amount)}</div>
+  const groups = [];
+  let cur = null;
+  for (const t of filtered) {
+    const dk = dayKey(t.date);
+    if (!cur || cur.dk !== dk) {
+      cur = { dk, date: t.date, items: [], exp: 0, inc: 0 };
+      groups.push(cur);
+    }
+    cur.items.push(t);
+    if (t.type === 'expense') cur.exp += +t.amount || 0;
+    else cur.inc += +t.amount || 0;
+  }
+  list.innerHTML = groups.map(g => `
+    <div class="day-header">
+      <span class="dh-label">${escapeHtml(dayLabelReport(g.date))}</span>
+      <span class="dh-totals">
+        ${g.exp > 0 ? `<span class="dh-exp">-${fmtMoney(g.exp)}</span>` : ''}
+        ${g.inc > 0 ? `<span class="dh-inc">+${fmtMoney(g.inc)}</span>` : ''}
+      </span>
     </div>
+    ${g.items.map(t => `
+      <div class="report-row" data-id="${t.id}">
+        <div class="dir-pill ${t.type}"></div>
+        <div class="col-1">
+          <div class="top"><span class="cat">${escapeHtml(t.category||'')}</span></div>
+          ${t.note ? `<div class="note">${escapeHtml(t.note)}</div>` : ''}
+        </div>
+        <div class="amount ${t.type}">${t.type==='expense'?'-':'+'}${fmtMoney(t.amount)}</div>
+      </div>
+    `).join('')}
   `).join('');
   list.querySelectorAll('.report-row').forEach(row => {
     row.addEventListener('click', () => {
