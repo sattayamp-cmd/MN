@@ -496,7 +496,10 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
       <div class="setting-group">
         <h3>ข้อมูล</h3>
         <button class="btn" id="export-json" style="margin-right:6px">Export JSON</button>
+        <button class="btn" id="import-json" style="margin-right:6px">Import JSON</button>
+        <input type="file" id="import-file" accept=".json,application/json" hidden>
         <button class="btn danger" id="clear-data">ล้างข้อมูลทั้งหมด</button>
+        <div id="backup-info" style="font-size:11px;color:var(--text-3);margin-top:8px"></div>
       </div>
 
       <div style="text-align:center; font-size:11px; color:var(--text-3); padding:8px">v1.0 · single-file PWA</div>
@@ -1448,6 +1451,7 @@ function renderSettings() {
   renderAccounts();
   renderCatChips('expense');
   renderCatChips('income');
+  renderBackupInfo();
 }
 function renderAccounts() {
   const wrap = document.getElementById('my-accounts-list');
@@ -1528,13 +1532,69 @@ document.getElementById('clear-data').addEventListener('click', async () => {
   flash('ล้างข้อมูลแล้ว');
 });
 document.getElementById('export-json').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(state.transactions, null, 2)], {type:'application/json'});
+  // api_key is intentionally excluded — backup files end up in Drive/Files
+  const { api_key, last_export, ...settings } = state.settings;
+  const payload = { schemaVersion: 2, exportedAt: nowIso(), settings, transactions: state.transactions };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `budget-backup-${Date.now()}.json`;
+  a.href = url; a.download = `budget-backup-${dayKey(nowIso())}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  state.settings.last_export = nowIso();
+  saveSettings();
+  renderBackupInfo();
 });
+
+// Import JSON — merge, never overwrite. Accepts v1 (plain array) and v2 ({settings, transactions}).
+function txFingerprint(t) {
+  return t.type + '|' + Math.round((t.amount||0)*100) + '|' + (t.date || '').slice(0,16);
+}
+document.getElementById('import-json').addEventListener('click', () => document.getElementById('import-file').click());
+document.getElementById('import-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch (err) { alert('อ่านไฟล์ไม่ได้ — ต้องเป็นไฟล์ JSON ที่ export จากแอปนี้'); return; }
+  const incoming = Array.isArray(data) ? data : (data.transactions || []);
+  const ids = new Set(state.transactions.map(t => t.id));
+  const hashes = new Set(state.transactions.map(t => t.slip_hash).filter(Boolean));
+  const prints = new Set(state.transactions.map(txFingerprint));
+  let added = 0, skipped = 0;
+  for (const t of incoming) {
+    if (!t || !t.id || typeof t.amount !== 'number' || !t.date ||
+        ids.has(t.id) || (t.slip_hash && hashes.has(t.slip_hash)) || prints.has(txFingerprint(t))) {
+      skipped++; continue;
+    }
+    await txAdd(t);
+    state.transactions.push(t);
+    ids.add(t.id); if (t.slip_hash) hashes.add(t.slip_hash); prints.add(txFingerprint(t));
+    added++;
+  }
+  // Merge settings: union accounts + categories, keep this device's api_key/model
+  const s = data.settings;
+  if (s) {
+    for (const acc of (s.my_accounts || [])) {
+      if (!state.settings.my_accounts.some(a => a.bank === acc.bank && a.last4 === acc.last4)) state.settings.my_accounts.push(acc);
+    }
+    for (const kind of ['expense', 'income']) {
+      for (const c of ((s.categories || {})[kind] || [])) {
+        if (!state.settings.categories[kind].includes(c)) state.settings.categories[kind].push(c);
+      }
+    }
+    saveSettings();
+  }
+  renderChatList(); refreshReports(); renderSettings();
+  alert(`Import เสร็จ\nเพิ่มใหม่ ${added} รายการ\nข้ามรายการซ้ำ ${skipped} รายการ`);
+});
+
+function renderBackupInfo() {
+  const el = document.getElementById('backup-info');
+  const last = state.settings.last_export;
+  el.textContent = last ? `Export ล่าสุด: ${fmtDate(last)}` : 'ยังไม่เคย export — ควร backup เก็บไว้ใน Drive/Files';
+}
 
 function flash(msg) {
   const el = document.createElement('div');
@@ -1578,6 +1638,12 @@ document.querySelectorAll('.bottomnav button').forEach(b => {
     const empty = chatList.querySelector('.chat-empty');
     if (empty) empty.insertAdjacentHTML('afterend',
       '<div class="bubble system">💡 ยังไม่ได้ตั้งค่า API key — ไปที่แท็บ "ตั้งค่า"</div>');
+  }
+  // Backup reminder: data lives only on this device
+  const last = state.settings.last_export;
+  if (state.transactions.length && (!last || Date.now() - new Date(last) > 7 * 86400000)) {
+    chatList.insertAdjacentHTML('afterbegin',
+      '<div class="bubble system">💾 ไม่ได้ backup เกิน 7 วัน — ไปที่ ตั้งค่า → Export JSON แล้วเซฟเข้า Drive</div>');
   }
 
   // Register service worker
